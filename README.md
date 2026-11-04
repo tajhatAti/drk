@@ -64,7 +64,7 @@ Render Dashboard → **New → Web Service** → `tajhatAti/drk` repository ন�
 ```text
 Environment: Python 3
 Build Command: pip install -r requirements.txt
-Start Command: gunicorn app:app
+Start Command: gunicorn --bind 0.0.0.0:$PORT app:app
 ```
 
 Environment Variables-এ নিজের credentials দিন:
