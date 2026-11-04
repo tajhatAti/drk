@@ -253,5 +253,7 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 
 
 if __name__ == "__main__":
-    print("Open http://127.0.0.1:8080 in the same phone/browser.")
-    app.run(host="127.0.0.1", port=8080, debug=False, threaded=True)
+    port = int(os.environ.get("PORT", "8080"))
+    host = os.environ.get("HOST", "127.0.0.1")
+    print(f"Open http://{host}:{port} in the browser.")
+    app.run(host=host, port=port, debug=False, threaded=True)

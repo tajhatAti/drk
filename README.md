@@ -57,6 +57,25 @@ python app.py
 - `app.py`-তে `0.0.0.0` ব্যবহার করবেন না।
 - Session file delete করলে পরের বার আবার OTP login লাগবে।
 
+## Render deployment
+
+Render Dashboard → **New → Web Service** → `tajhatAti/drk` repository নির্বাচন করুন। Branch হিসেবে `master` নির্বাচন করুন। এই settings দিন:
+
+```text
+Environment: Python 3
+Build Command: pip install -r requirements.txt
+Start Command: gunicorn app:app
+```
+
+Environment Variables-এ নিজের credentials দিন:
+
+```text
+TG_API_ID=আপনার_api_id
+TG_API_HASH=আপনার_api_hash
+```
+
+Render নিজে `PORT` সেট করবে। Code সেটি ব্যবহার করে public host-এ bind করবে। Free service restart/sleep হলে local session file হারিয়ে যেতে পারে, তাই আবার OTP লাগতে পারে; raw session string browser বা GitHub-এ রাখবেন না। Telegram API/IP restriction bypass করার code এখানে নেই।
+
 ## Scope
 
 এটি foundation build: OTP/2FA login, dialogs, text messages। Telegram X-এর মতো UI বানালেও Telegram-এর backend features API integration ছাড়া কাজ করবে না। Media, file upload/download, contacts, groups, search, reactions, pinned messages, notifications, drafts এবং settings পরবর্তী আলাদা modules হিসেবে যোগ করতে হবে।
