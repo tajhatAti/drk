@@ -214,40 +214,36 @@ def send_message():
 
 
 PAGE = r'''<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Local Telegram Client</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DRK Telegram Client</title>
 <style>
-body{font-family:system-ui;background:#15202b;color:#eef;max-width:900px;margin:auto;padding:18px}
-input,button{font-size:16px;padding:10px;margin:4px;border-radius:8px;border:1px solid #506070}
-input{background:#202f3d;color:#fff}button{background:#2aabee;color:#fff;border:0;cursor:pointer}
-.card{background:#1d2d3b;padding:14px;border-radius:12px;margin:10px 0}.row{display:flex;gap:8px;flex-wrap:wrap}
-#dialogs button{display:block;width:100%;text-align:left;background:#263d50;margin:5px 0}.msg{padding:8px;margin:5px;border-radius:9px;background:#263d50}.out{background:#245b66;margin-left:15%}
-#messages{min-height:180px;max-height:420px;overflow:auto}
-small{color:#aab8c2}.error{color:#ff9b9b}
-</style></head>
-<body>
-<h1>Local Telegram Client</h1>
-<div class="card"><h3>1. Login</h3>
-<div class="row"><input id="phone" placeholder="+8801XXXXXXXXX"><button onclick="sendCode()">Send OTP</button></div>
-<div class="row"><input id="code" placeholder="OTP code"><button onclick="verifyCode()">Verify OTP</button></div>
-<div class="row"><input id="password" type="password" placeholder="2FA password"><button onclick="verify2FA()">Verify 2FA</button></div>
-<div id="loginStatus"></div></div>
-<div class="card"><h3>2. Chats</h3><button onclick="loadDialogs()">Load chats</button><div id="dialogs"></div></div>
-<div class="card"><h3>3. Messages</h3><div id="selected"><small>Select a chat.</small></div><div id="messages"></div>
-<div class="row"><input id="text" style="flex:1" placeholder="Message"><button onclick="sendMessage()">Send</button></div></div>
+body{font-family:system-ui;background:#101b26;color:#eef;max-width:980px;margin:auto;padding:12px}input,button,select{font-size:15px;padding:9px;margin:3px;border-radius:8px;border:1px solid #536b7d}input,select{background:#1c2b38;color:#fff}button{background:#2aabee;color:#fff;border:0;cursor:pointer}.card{background:#192b3a;padding:13px;border-radius:12px;margin:10px 0}.row{display:flex;gap:6px;flex-wrap:wrap}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.wide{width:100%;box-sizing:border-box}#dialogs button{display:block;width:100%;text-align:left;background:#243e52;margin:4px 0}.msg{padding:8px;margin:5px;border-radius:9px;background:#263d50}.out{background:#245b66;margin-left:15%}#messages{min-height:180px;max-height:420px;overflow:auto}.tools{border-top:1px solid #385064;margin-top:10px;padding-top:10px}small{color:#aab8c2}.error{color:#ff9b9b}.ok{color:#83e6a2}.result{white-space:pre-wrap;background:#12202c;padding:8px;border-radius:8px}
+</style></head><body>
+<h1>DRK Telegram Client</h1>
+<div class="card"><h3>1. OTP + 2FA Login</h3><div class="row"><input id="phone" placeholder="+8801XXXXXXXXX"><button onclick="sendCode()">Send OTP</button><input id="code" placeholder="OTP"><button onclick="verifyCode()">Verify OTP</button><input id="password" type="password" placeholder="2FA password"><button onclick="verify2FA()">Verify 2FA</button></div><div id="loginStatus"></div></div>
+<div class="card"><h3>2. Chats & Search</h3><div class="row"><button onclick="loadDialogs()">Load chats</button><input id="search" placeholder="Search messages"><button onclick="searchMessages()">Search</button></div><div id="dialogs"></div><div id="searchResults"></div></div>
+<div class="card"><h3>3. Chat</h3><div id="selected"><small>Select a chat.</small></div><div id="messages"></div><div class="row"><input id="text" class="wide" placeholder="Message"><button onclick="sendMessage()">Send</button></div><div class="row"><input id="media" type="file"><input id="caption" placeholder="Caption"><button onclick="sendMedia()">Send file</button></div><div class="tools"><div class="row"><input id="actionId" placeholder="Message ID"><input id="actionText" placeholder="Reply/edit text"><input id="forwardPeer" placeholder="Forward to peer"><select id="action"><option>reply</option><option>forward</option><option>edit</option><option>delete</option><option>pin</option><option>react</option></select><input id="emoji" value="👍" placeholder="Emoji"><button onclick="messageAction()">Run action</button></div></div></div>
+<div class="card"><h3>4. Create Group / Channel</h3><div class="grid"><input id="groupTitle" placeholder="Group title"><input id="groupUsers" placeholder="User IDs/usernames, comma separated"><button onclick="createGroup()">Create group</button><input id="channelTitle" placeholder="Channel title"><input id="channelAbout" placeholder="About"><select id="channelType"><option value="false">Broadcast channel</option><option value="true">Megagroup</option></select><button onclick="createChannel()">Create channel</button></div></div>
+<div class="card"><h3>5. Admin, Invite, Contacts & BotFather</h3><div class="grid"><input id="adminUser" placeholder="User ID/username"><select id="adminAction"><option>promote</option><option>demote</option><option>ban</option><option>unban</option></select><button onclick="adminAction()">Admin action</button><button onclick="inviteLink()">Create invite link for selected chat</button><button onclick="loadContacts()">Load contacts</button><button onclick="botfather()">Open BotFather /newbot</button></div><div id="featureResult" class="result"></div></div>
 <script>
-let peer=null;
-const $=id=>document.getElementById(id);
-async function api(url,opt={}){let r=await fetch(url,{headers:{'Content-Type':'application/json'},...opt});let j=await r.json();if(!j.ok)throw Error(j.error||'Request failed');return j}
-function show(x){$('loginStatus').innerHTML='<small>'+x+'</small>'}
-async function sendCode(){try{let j=await api('/api/login/send-code',{method:'POST',body:JSON.stringify({phone:$('phone').value})});show(j.message)}catch(e){show('<span class=error>'+e.message+'</span>')}}
-async function verifyCode(){try{let j=await api('/api/login/verify',{method:'POST',body:JSON.stringify({code:$('code').value})});show(j.two_fa?'OTP accepted. Enter 2FA password.':'Logged in.');if(j.authorized)loadDialogs()}catch(e){show('<span class=error>'+e.message+'</span>')}}
-async function verify2FA(){try{let j=await api('/api/login/2fa',{method:'POST',body:JSON.stringify({password:$('password').value})});show('2FA login successful.');loadDialogs()}catch(e){show('<span class=error>'+e.message+'</span>')}}
-async function loadDialogs(){try{let j=await api('/api/dialogs');$('dialogs').innerHTML=j.dialogs.map(d=>`<button onclick="openChat(${d.id},${JSON.stringify(d.name)})">${esc(d.name)} <small>(${d.unread_count})</small></button>`).join('')}catch(e){$('dialogs').innerHTML='<span class=error>'+e.message+'</span>'}}
-async function openChat(id,name){peer=id;$('selected').textContent=name;try{let j=await api('/api/messages?peer='+id);$('messages').innerHTML=j.messages.map(m=>`<div class="msg ${m.out?'out':''}"><small>${esc(m.sender)} · ${esc(m.date||'')}</small><br>${esc(m.text)}</div>`).join('');$('messages').scrollTop=$('messages').scrollHeight}catch(e){$('messages').textContent=e.message}}
+let peer=null;const $=id=>document.getElementById(id);
+async function api(url,opt={}){let r=await fetch(url,{...opt,headers:{...(opt.body instanceof FormData?{}:{'Content-Type':'application/json'}),...(opt.headers||{})}});let j=await r.json();if(!j.ok)throw Error(j.error||'Request failed');return j}
+function show(x,where='loginStatus'){ $(where).innerHTML='<small>'+x+'</small>' }
+async function sendCode(){try{let j=await api('/api/login/send-code',{method:'POST',body:JSON.stringify({phone:$('phone').value})});show(j.message)}catch(e){show('<span class=error>'+esc(e.message)+'</span>')}}
+async function verifyCode(){try{let j=await api('/api/login/verify',{method:'POST',body:JSON.stringify({code:$('code').value})});show(j.two_fa?'OTP accepted. Enter 2FA password.':'Logged in.');if(j.authorized)loadDialogs()}catch(e){show('<span class=error>'+esc(e.message)+'</span>')}}
+async function verify2FA(){try{await api('/api/login/2fa',{method:'POST',body:JSON.stringify({password:$('password').value})});show('<span class=ok>2FA login successful.</span>');loadDialogs()}catch(e){show('<span class=error>'+esc(e.message)+'</span>')}}
+async function loadDialogs(){try{let j=await api('/api/dialogs');$('dialogs').innerHTML=j.dialogs.map(d=>`<button onclick="openChat(${d.id},${JSON.stringify(d.name)})">${esc(d.name)} <small>(${d.unread_count})</small></button>`).join('')}catch(e){show('<span class=error>'+esc(e.message)+'</span>','dialogs')}}
+async function openChat(id,name){peer=id;$('selected').textContent=name;try{let j=await api('/api/messages?peer='+id);$('messages').innerHTML=j.messages.map(m=>`<div class="msg ${m.out?'out':''}"><small>${esc(m.sender)} · ${esc(m.date||'')} · #${m.id}</small><br>${esc(m.text)}</div>`).join('');$('messages').scrollTop=$('messages').scrollHeight}catch(e){$('messages').textContent=e.message}}
 async function sendMessage(){if(!peer)return alert('Select a chat first');let text=$('text').value.trim();if(!text)return;try{await api('/api/messages/send',{method:'POST',body:JSON.stringify({peer,text})});$('text').value='';openChat(peer,'Chat')}catch(e){alert(e.message)}}
+async function sendMedia(){if(!peer)return alert('Select a chat first');let f=$('media').files[0];if(!f)return alert('Select a file');let form=new FormData();form.append('peer',peer);form.append('caption',$('caption').value);form.append('file',f);try{await api('/api/media/send',{method:'POST',body:form});show('<span class=ok>File sent.</span>','featureResult');openChat(peer,'Chat')}catch(e){show('<span class=error>'+esc(e.message)+'</span>','featureResult')}}
+async function messageAction(){if(!peer)return alert('Select a chat first');let body={peer,message_id:Number($('actionId').value),action:$('action').value,text:$('actionText').value,emoji:$('emoji').value,to_peer:$('forwardPeer').value};try{await api('/api/messages/action',{method:'POST',body:JSON.stringify(body)});show('<span class=ok>Action completed.</span>','featureResult');openChat(peer,'Chat')}catch(e){show('<span class=error>'+esc(e.message)+'</span>','featureResult')}}
+async function createGroup(){let users=$('groupUsers').value.split(',').map(x=>x.trim()).filter(Boolean);try{let j=await api('/api/groups/create',{method:'POST',body:JSON.stringify({title:$('groupTitle').value,users})});show('Group created: '+j.id,'featureResult')}catch(e){show('<span class=error>'+esc(e.message)+'</span>','featureResult')}}
+async function createChannel(){try{let j=await api('/api/channels/create',{method:'POST',body:JSON.stringify({title:$('channelTitle').value,about:$('channelAbout').value,megagroup:$('channelType').value==='true'})});show('Channel created: '+j.id,'featureResult')}catch(e){show('<span class=error>'+esc(e.message)+'</span>','featureResult')}}
+async function searchMessages(){try{let j=await api('/api/search?q='+encodeURIComponent($('search').value));$('searchResults').innerHTML=j.results.map(x=>`<div class=result>#${x.id} ${esc(x.text)} <small>${esc(x.date||'')}</small></div>`).join('')}catch(e){show('<span class=error>'+esc(e.message)+'</span>','searchResults')}}
+async function adminAction(){if(!peer)return alert('Select a group/channel first');try{let j=await api('/api/admin/action',{method:'POST',body:JSON.stringify({peer,user:$('adminUser').value,action:$('adminAction').value})});show('Admin action completed: '+j.action,'featureResult')}catch(e){show('<span class=error>'+esc(e.message)+'</span>','featureResult')}}
+async function inviteLink(){if(!peer)return alert('Select a group/channel first');try{let j=await api('/api/invite-link',{method:'POST',body:JSON.stringify({peer})});show('Invite link: '+esc(j.link),'featureResult')}catch(e){show('<span class=error>'+esc(e.message)+'</span>','featureResult')}}
+async function loadContacts(){try{let j=await api('/api/contacts');show(j.contacts.map(x=>x.name+' '+(x.username?'@'+x.username:'')).join('\n'),'featureResult')}catch(e){show('<span class=error>'+esc(e.message)+'</span>','featureResult')}}
+async function botfather(){try{let j=await api('/api/botfather/start',{method:'POST'});show('BotFather opened. Continue manually. '+j.note,'featureResult')}catch(e){show('<span class=error>'+esc(e.message)+'</span>','featureResult')}}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 </script></body></html>'''
 
