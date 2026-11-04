@@ -78,4 +78,16 @@ Render নিজে `PORT` সেট করবে। Code সেটি ব্য
 
 ## Scope
 
-এটি foundation build: OTP/2FA login, dialogs, text messages। Telegram X-এর মতো UI বানালেও Telegram-এর backend features API integration ছাড়া কাজ করবে না। Media, file upload/download, contacts, groups, search, reactions, pinned messages, notifications, drafts এবং settings পরবর্তী আলাদা modules হিসেবে যোগ করতে হবে।
+বর্তমান build-এ OTP/2FA login, dialogs, chat open, message history ও text send-এর সঙ্গে এই API actions যোগ হয়েছে:
+
+- `POST /api/groups/create` — group create
+- `POST /api/channels/create` — channel বা megagroup create
+- `GET /api/search?q=...` — global message search
+- `POST /api/messages/action` — reply, forward, edit, delete, pin, reaction
+- `POST /api/media/send` — multipart file/media send
+- `POST /api/admin/action` — promote, demote, ban, unban
+- `POST /api/invite-link` — invite link export
+- `GET /api/contacts` — contacts list
+- `POST /api/botfather/start` — BotFather conversation শুরু করে; token manually handle করতে হবে
+
+Telegram X-এর মতো UI বানালেও Telegram backend features API integration ছাড়া কাজ করে না। Destructive actions-এর জন্য নিজের account-এর permission লাগবে। Mass spam, bulk invite, raw session-string import এবং IP/security bypass নেই।

@@ -4,7 +4,7 @@ import threading
 from pathlib import Path
 
 from flask import Flask, jsonify, request, render_template_string
-from telethon import TelegramClient
+from telethon import TelegramClient, functions, types
 from telethon.errors import (
     ApiIdInvalidError,
     PhoneCodeExpiredError,
@@ -250,6 +250,202 @@ async function openChat(id,name){peer=id;$('selected').textContent=name;try{let 
 async function sendMessage(){if(!peer)return alert('Select a chat first');let text=$('text').value.trim();if(!text)return;try{await api('/api/messages/send',{method:'POST',body:JSON.stringify({peer,text})});$('text').value='';openChat(peer,'Chat')}catch(e){alert(e.message)}}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 </script></body></html>'''
+
+
+@app.post("/api/groups/create")
+def create_group():
+    data = request.get_json(silent=True) or {}
+    title = str(data.get("title", "")).strip()
+    users = data.get("users", [])
+    if not title or not isinstance(users, list) or not users:
+        return jsonify({"ok": False, "error": "title and at least one user are required"}), 400
+
+    async def task():
+        await ensure_connected()
+        return await client(functions.messages.CreateChatRequest(users=users, title=title))
+
+    try:
+        result = run(task())
+        return jsonify({"ok": True, "id": getattr(result.chats[0], "id", None)})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.post("/api/channels/create")
+def create_channel():
+    data = request.get_json(silent=True) or {}
+    title = str(data.get("title", "")).strip()
+    about = str(data.get("about", "")).strip()
+    megagroup = bool(data.get("megagroup", False))
+    if not title:
+        return jsonify({"ok": False, "error": "title is required"}), 400
+
+    async def task():
+        await ensure_connected()
+        return await client(functions.channels.CreateChannelRequest(
+            title=title, about=about, megagroup=megagroup, broadcast=not megagroup
+        ))
+
+    try:
+        result = run(task())
+        return jsonify({"ok": True, "id": getattr(result.chats[0], "id", None)})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.get("/api/search")
+def search_messages():
+    query = str(request.args.get("q", "")).strip()
+    limit = min(max(int(request.args.get("limit", "30")), 1), 100)
+
+    async def task():
+        await ensure_connected()
+        result = []
+        async for message in client.iter_messages(None, search=query, limit=limit):
+            result.append({"id": message.id, "peer_id": getattr(message.peer_id, "channel_id", None) or getattr(message.peer_id, "user_id", None), "text": message.message or "", "date": message.date.isoformat() if message.date else None})
+        return result
+
+    try:
+        return jsonify({"ok": True, "results": run(task())})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.post("/api/messages/action")
+def message_action():
+    data = request.get_json(silent=True) or {}
+    action = str(data.get("action", "")).lower()
+    peer = data.get("peer")
+    message_id = int(data.get("message_id", 0))
+    if not peer or not message_id:
+        return jsonify({"ok": False, "error": "peer and message_id are required"}), 400
+
+    async def task():
+        await ensure_connected()
+        if action == "edit":
+            return await client.edit_message(peer, message_id, str(data.get("text", "")))
+        if action == "delete":
+            return await client.delete_messages(peer, [message_id], revoke=True)
+        if action == "pin":
+            return await client.pin_message(peer, message_id, notify=bool(data.get("notify", False)))
+        if action == "reply":
+            return await client.send_message(peer, str(data.get("text", "")), reply_to=message_id)
+        if action == "forward":
+            return await client.forward_messages(data.get("to_peer"), message_id, from_peer=peer)
+        if action == "react":
+            emoji = str(data.get("emoji", "👍"))
+            return await client(functions.messages.SendReactionRequest(peer=peer, msg_id=message_id, reaction=[types.ReactionEmoji(emoticon=emoji)]))
+        raise ValueError("Unsupported action")
+
+    try:
+        run(task())
+        return jsonify({"ok": True, "action": action})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.post("/api/media/send")
+def send_media():
+    peer = request.form.get("peer")
+    caption = request.form.get("caption", "")
+    upload = request.files.get("file")
+    if not peer or not upload:
+        return jsonify({"ok": False, "error": "peer and file are required"}), 400
+    temp_path = Path("/tmp") / f"tg_upload_{os.getpid()}_{upload.filename}"
+    upload.save(temp_path)
+
+    async def task():
+        await ensure_connected()
+        return await client.send_file(peer, str(temp_path), caption=caption)
+
+    try:
+        run(task())
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
+@app.post("/api/invite-link")
+def invite_link():
+    data = request.get_json(silent=True) or {}
+    peer = data.get("peer")
+
+    async def task():
+        await ensure_connected()
+        result = await client(functions.messages.ExportChatInviteRequest(peer=peer))
+        return getattr(result, "link", str(result))
+
+    try:
+        return jsonify({"ok": True, "link": run(task())})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.post("/api/admin/action")
+def admin_action():
+    data = request.get_json(silent=True) or {}
+    peer = data.get("peer")
+    user = data.get("user")
+    action = str(data.get("action", "")).lower()
+    if not peer or not user or action not in {"promote", "demote", "ban", "unban"}:
+        return jsonify({"ok": False, "error": "peer, user and action are required"}), 400
+
+    async def task():
+        await ensure_connected()
+        if action in {"promote", "demote"}:
+            rights = types.ChatAdminRights(
+                change_info=action == "promote", post_messages=action == "promote",
+                edit_messages=action == "promote", delete_messages=action == "promote",
+                ban_users=action == "promote", invite_users=action == "promote",
+                pin_messages=action == "promote", add_admins=False,
+            )
+            return await client(functions.channels.EditAdminRequest(
+                channel=peer, user_id=user, admin_rights=rights,
+                rank=str(data.get("rank", "admin")) if action == "promote" else "",
+            ))
+        banned = action == "ban"
+        rights = types.ChatBannedRights(
+            until_date=None, view_messages=banned, send_messages=banned,
+            send_media=banned, send_stickers=banned, send_gifs=banned,
+            send_games=banned, send_inline=banned, embed_links=banned,
+            send_polls=banned, change_info=False, invite_users=False,
+            pin_messages=False,
+        )
+        return await client(functions.channels.EditBannedRequest(channel=peer, participant=user, banned_rights=rights))
+
+    try:
+        run(task())
+        return jsonify({"ok": True, "action": action})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.get("/api/contacts")
+def contacts():
+    async def task():
+        await ensure_connected()
+        result = await client(functions.contacts.GetContactsRequest(hash=0))
+        return [{"id": u.id, "name": " ".join(filter(None, [u.first_name, u.last_name])), "username": u.username} for u in result.users]
+
+    try:
+        return jsonify({"ok": True, "contacts": run(task())})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.post("/api/botfather/start")
+def botfather_start():
+    async def task():
+        await ensure_connected()
+        message = await client.send_message("@BotFather", "/newbot")
+        return {"id": message.id, "note": "Continue the BotFather conversation manually; never expose the bot token in logs or GitHub."}
+
+    try:
+        return jsonify({"ok": True, **run(task())})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 if __name__ == "__main__":
